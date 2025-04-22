@@ -146,11 +146,38 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
         segment.ray.origin = cam.position;
         segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
-        // TODO: implement antialiasing by jittering the ray
+        thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, pathSegments[index].remainingBounces);
+
+        // Generate two seudo random numbers from unifrom distribution
+        thrust::uniform_real_distribution<float> sampleDistribution(-0.5f, 0.5f);
+        float jitterX = sampleDistribution(rng);
+        float jitterY = sampleDistribution(rng);
+
+        // Add ray jitter for antialiasing
         segment.ray.direction = glm::normalize(cam.view
-            - cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f)
-            - cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
+            - cam.right * cam.pixelLength.x * ((float)x + jitterX - (float)cam.resolution.x * 0.5f)
+            - cam.up * cam.pixelLength.y * ((float)y + jitterY - (float)cam.resolution.y * 0.5f)
         );
+
+                if (dof) {
+            thrust::uniform_real_distribution<float> u01(0, 1);
+
+            // Lens jitter: calculate random offset within lens radius
+            float angle = u01(rng) * TWO_PI;
+            float radius = u01(rng) * cam.lensRadius;
+            glm::vec3 lensOffset = radius * (cos(angle) * cam.right + sin(angle) * cam.up);
+
+            // Adjust ray origin for DOF effect
+            segment.ray.origin += lensOffset;
+
+            // Recalculate direction to focus on the focal plane
+            float focalDistFactor = cam.focalDistance / glm::dot(segment.ray.direction, cam.view);
+            glm::vec3 focalPoint = focalDistFactor * segment.ray.direction;
+            segment.ray.direction = glm::normalize(focalPoint - lensOffset);
+        }
+
+        // Initialize other ray properties
+        segment.hitLight = false;
 
         segment.pixelIndex = index;
         segment.remainingBounces = traceDepth;
