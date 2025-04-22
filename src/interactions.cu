@@ -50,4 +50,38 @@ __host__ __device__ void scatterRay(
     // TODO: implement this.
     // A basic implementation of pure-diffuse shading will just call the
     // calculateRandomDirectionInHemisphere defined above.
+    
+    thrust::uniform_real_distribution<float> random{ 0, 1 };
+
+    float probSample = random(rng);
+
+    if (probSample < m.hasRefractive) {
+        float cosTheta = - glm::dot(pathSegment.ray.direction, normal);
+        float sinTheta = sqrtf(1 - cosTheta * cosTheta);
+
+        bool isEntering = cosTheta > 0;
+        float iorRatio;
+        if (isEntering) iorRatio = 1 / m.indexOfRefraction;
+        else iorRatio = m.indexOfRefraction;
+
+        // Use Schlick's approximation for reflectance.
+        float r0 = (1 - iorRatio) / (1 + iorRatio);
+        r0 = r0 * r0;
+        float schlickProbability = r0 + (1 - r0) * std::pow((1 - cosTheta), 5);
+
+        // Total reflection
+        if ((iorRatio * sinTheta > 1) || (random(rng) < schlickProbability)) {
+            pathSegment.ray.direction = glm::reflect(pathSegment.ray.direction, normal);
+        }
+        else {
+            pathSegment.ray.direction = glm::refract(pathSegment.ray.direction, normal, iorRatio);
+        }
+    }
+    else if (probSample < m.hasReflective) {
+        pathSegment.ray.direction = glm::reflect(pathSegment.ray.direction, normal);
+    }
+    else {
+        pathSegment.ray.direction = calculateRandomDirectionInHemisphere(normal, rng);
+    }
+    pathSegment.ray.origin = intersect + 0.0001f * pathSegment.ray.direction;
 }
