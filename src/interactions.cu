@@ -47,40 +47,41 @@ __host__ __device__ void scatterRay(
     const Material &m,
     thrust::default_random_engine &rng)
 {
-    // TODO: implement this.
-    // A basic implementation of pure-diffuse shading will just call the
-    // calculateRandomDirectionInHemisphere defined above.
     
-    thrust::uniform_real_distribution<float> random{ 0, 1 };
+    thrust::uniform_real_distribution<float> uniformDistribution{ 0.0f, 1.0f };
+    // Use to stocastically determine between reflective, refractive, and diffuse surfaces
+    float sampleProb = uniformDistribution(rng);
 
-    float probSample = random(rng);
+    if (sampleProb < m.hasRefractive) { // refractive
+        float cosT = - glm::dot(pathSegment.ray.direction, normal);
+        float sinT = sqrtf(1 - cosT * cosT);
 
-    if (probSample < m.hasRefractive) {
-        float cosTheta = - glm::dot(pathSegment.ray.direction, normal);
-        float sinTheta = sqrtf(1 - cosTheta * cosTheta);
+        bool isEntering = cosT > 0.0f;
+        float indexOfRefraction = isEntering ? (1.0f / m.indexOfRefraction) : m.indexOfRefraction;
+    
+        float reflectance0 = (1.0f - indexOfRefraction) / (1.0f + indexOfRefraction);
+        reflectance0 *= reflectance0;
+        float reflectChance = reflectance0 + (1.0f - reflectance0) * powf(1.0f - cosT, 5.0f);
+    
 
-        bool isEntering = cosTheta > 0;
-        float iorRatio;
-        if (isEntering) iorRatio = 1 / m.indexOfRefraction;
-        else iorRatio = m.indexOfRefraction;
-
-        // Use Schlick's approximation for reflectance.
-        float r0 = (1 - iorRatio) / (1 + iorRatio);
+        // Schlick's approximation to determine whether to reflect or refract
+        float r0 = (1 - indexOfRefraction) / (1 + indexOfRefraction);
         r0 = r0 * r0;
-        float schlickProbability = r0 + (1 - r0) * std::pow((1 - cosTheta), 5);
+        float schlickProbability = r0 + (1 - r0) * std::pow((1 - cosT), 5);
 
         // Total reflection
-        if ((iorRatio * sinTheta > 1) || (random(rng) < schlickProbability)) {
+        if ((indexOfRefraction * sinT > 1) || (uniformDistribution(rng) < schlickProbability)) {
             pathSegment.ray.direction = glm::reflect(pathSegment.ray.direction, normal);
         }
         else {
-            pathSegment.ray.direction = glm::refract(pathSegment.ray.direction, normal, iorRatio);
+            // glm::refract() implements Snell's law
+            pathSegment.ray.direction = glm::refract(pathSegment.ray.direction, normal, indexOfRefraction);
         }
     }
-    else if (probSample < m.hasReflective) {
+    else if (sampleProb < m.hasReflective) { //reflective
         pathSegment.ray.direction = glm::reflect(pathSegment.ray.direction, normal);
     }
-    else {
+    else { // diffuse via cosine-weighted hemisphere
         pathSegment.ray.direction = calculateRandomDirectionInHemisphere(normal, rng);
     }
     pathSegment.ray.origin = intersect + 0.0001f * pathSegment.ray.direction;
