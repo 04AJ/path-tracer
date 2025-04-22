@@ -226,15 +226,7 @@ __global__ void computeIntersections(
     }
 }
 
-// LOOK: "fake" shader demonstrating what you might do with the info in
-// a ShadeableIntersection, as well as how to use thrust's random number
-// generator. Observe that since the thrust random number generator basically
-// adds "noise" to the iteration, the image should start off noisy and get
-// cleaner as more iterations are computed.
-//
-// Note that this shader does NOT do a BSDF evaluation!
-// Your shaders should handle that - this can allow techniques such as
-// bump mapping.
+// BSDF shading kernel
 __global__ void shadeFakeMaterial(
     int iter,
     int num_paths,
@@ -251,33 +243,31 @@ __global__ void shadeFakeMaterial(
         ShadeableIntersection intersection = shadeableIntersections[idx];
         if (intersection.t > 0.0f) // if the intersection exists...
         {
-          // Set up the RNG
-          // LOOK: this is how you use thrust's RNG! Please look at
-          // makeSeededRandomEngine as well.
+          // Set up the RNG using thrust
             thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
             thrust::uniform_real_distribution<float> u01(0, 1);
 
             Material material = materials[intersection.materialId];
             glm::vec3 materialColor = material.color;
 
-            // If the material indicates that the object was a light, "light" the ray
+            // If the material object is light, "light" the ray and set bounces to 0
             if (material.emittance > 0.0f) {
                 pathSegments[idx].color *= (materialColor * material.emittance);
                 pathSegment.remainingBounces = 0;
             }
-            // Otherwise, do some pseudo-lighting computation. This is actually more
-            // like what you would expect from shading in a rasterizer like OpenGL.
-            // TODO: replace this! you should be able to start with basically a one-liner
             else {
                 // Set up the RNG
                 thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, pathSegment.remainingBounces);
+                // Calculate point of intersection given the Ray (origin and direction) and the scalar distance to the instersection
+                glm::vec3 pointOfIntersection = getPointOnRay(pathSegment.ray, intersection.t);
 
-                // Compute intersection point on surface
-                glm::vec3 intersectionPoint = getPointOnRay(pathSegment.ray, intersection.t);
+                // If the material is not refractive, multiply the color by the material color
+                if (!material.hasRefractive){
+                    pathSegment.color *= materialColor;
+                }
 
-                if (!material.hasRefractive) pathSegment.color *= materialColor;
-
-                scatterRay(pathSegment, intersectionPoint, intersection.surfaceNormal, material, rng);
+                // Funcation that calculates the new ray direction based on material property
+                scatterRay(pathSegment, pointOfIntersection, intersection.surfaceNormal, material, rng);
 
                 --pathSegment.remainingBounces;
                 
