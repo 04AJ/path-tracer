@@ -47,6 +47,9 @@ struct Material
 
 struct Camera
 {
+    //NEW
+    float aperture;
+    float focalDistance;
     glm::ivec2 resolution;
     glm::vec3 position;
     glm::vec3 lookAt;

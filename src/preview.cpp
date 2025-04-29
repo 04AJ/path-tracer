@@ -236,8 +236,12 @@ void RenderImGui()
     //ImGui::Text("counter = %d", counter);
     ImGui::Text("Traced Depth %d", imguiData->TracedDepth);
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-    ImGui::End();
 
+    ImGui::Text("Visual Settings");
+    ImGui::Checkbox("Enable Depth Of Field", &imguiData->DoF);
+    ImGui::Checkbox("Enable Stratified Sampling", &imguiData->Stratified);
+    ImGui::SliderInt("Stratification Cells", &imguiData->StratNumCells, 1, 1024);
+    ImGui::End();
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
