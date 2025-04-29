@@ -241,6 +241,10 @@ void RenderImGui()
     ImGui::Checkbox("Enable Depth Of Field", &imguiData->DoF);
     ImGui::Checkbox("Enable Stratified Sampling", &imguiData->Stratified);
     ImGui::SliderInt("Stratification Cells", &imguiData->StratNumCells, 1, 1024);
+
+    ImGui::Text("Performance Settings");
+    ImGui::Checkbox("Enable Streamcompaction", &imguiData->StreamCompaction);
+
     ImGui::End();
 
     ImGui::Render();

@@ -6,6 +6,8 @@
 #include <thrust/execution_policy.h>
 #include <thrust/random.h>
 #include <thrust/remove.h>
+#include <thrust/device_vector.h>
+#include <thrust/sort.h>
 
 #include "sceneStructs.h"
 #include "scene.h"
@@ -86,6 +88,23 @@ __device__ glm::vec2 polarTransform(const glm::vec2 squareCoords) {
 	return radius * glm::vec2{ cosf(angle), sinf(angle) };
 }
 
+// Kernel that computes the condition buffer and partial image
+__global__ void updateActiveMaskAndAccumulateColor(
+    PathSegment* pathSegments, int totalPaths, bool* activeMask, glm::vec3* finalImage
+) {
+    int pixelIdx = (blockIdx.x * blockDim.x) + threadIdx.x;
+    if (pixelIdx >= totalPaths) return;
+
+    PathSegment currentPath = pathSegments[pixelIdx];
+
+    if (currentPath.remainingBounces <= 0) {
+        activeMask[pixelIdx] = true;
+        finalImage[currentPath.pixelIndex] += currentPath.color;
+    } else {
+        activeMask[pixelIdx] = false;
+    }
+}
+
 //Kernel that writes the image to the OpenGL PBO directly.
 __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution, int iter, glm::vec3* image)
 {
@@ -119,6 +138,8 @@ static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
+static bool* dev_boolBuffer = NULL;
+
 
 void InitDataContainer(GuiDataContainer* imGuiData)
 {
@@ -147,6 +168,8 @@ void pathtraceInit(Scene* scene)
     cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
     // TODO: initialize any extra device memeory you need
+    cudaMalloc(&dev_boolBuffer, pixelcount * sizeof(bool));
+
 
     checkCUDAError("pathtraceInit");
 }
@@ -159,6 +182,8 @@ void pathtraceFree()
     cudaFree(dev_materials);
     cudaFree(dev_intersections);
     // TODO: clean up any extra device memory you created
+    cudaFree(dev_boolBuffer);
+
 
     checkCUDAError("pathtraceFree");
 }
@@ -175,7 +200,7 @@ void pathtraceFree()
 */
 __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, PathSegment* pathSegments, bool hasDoF, bool hasStratified, int numCells)
 {
-
+    
     int x = (blockIdx.x * blockDim.x) + threadIdx.x;
     int y = (blockIdx.y * blockDim.y) + threadIdx.y;
 
@@ -199,31 +224,22 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
             - cam.up * cam.pixelLength.y * ((float)y + jitterY - (float)cam.resolution.y * 0.5f)
         );
       
-        // thrust::default_random_engine rng_aa = makeSeededRandomEngine(iter, index, -1);
-        // thrust::uniform_real_distribution<float> aaOffset(0, 1);
-        // glm::vec2 aaOffsetVec = generateStratifiedSample(glm::vec2{ aaOffset(rng_aa), aaOffset(rng_aa) }, iter, numCells, hasStratified);
-        // segment.ray.direction = glm::normalize(cam.view
-        //     - cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f - aaOffsetVec.x)
-        //     - cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f - aaOffsetVec.y)
-        // );
- 
+        if (hasDoF) {
+            thrust::default_random_engine randomGen = makeSeededRandomEngine(iter, index, -2);
+            thrust::uniform_real_distribution<float> randDist(0, 1);
 
-        // if (hasDoF) {
-        //     thrust::default_random_engine randomGen = makeSeededRandomEngine(iter, index, -2);
-        //     thrust::uniform_real_distribution<float> randDist(0, 1);
+            glm::vec2 aperturePoint = cam.aperture * polarTransform(
+                generateStratifiedSample(glm::vec2{ randDist(randomGen), randDist(randomGen) }, iter, numCells, hasStratified)
+            );
 
-        //     glm::vec2 aperturePoint = cam.aperture * polarTransform(
-        //         generateStratifiedSample(glm::vec2{ randDist(randomGen), randDist(randomGen) }, iter, numCells, hasStratified)
-        //     );
+            float rayViewDot = glm::dot(segment.ray.direction, cam.view);
+            float focalT = cam.focalDistance / rayViewDot;
 
-        //     float rayViewDot = glm::dot(segment.ray.direction, cam.view);
-        //     float focalT = cam.focalDistance / rayViewDot;
+            glm::vec3 focalPoint = segment.ray.origin + focalT * segment.ray.direction;
+            segment.ray.origin += aperturePoint.x * cam.right + aperturePoint.y * cam.up;
+            segment.ray.direction = glm::normalize(focalPoint - segment.ray.origin);
 
-        //     glm::vec3 focalPoint = segment.ray.origin + focalT * segment.ray.direction;
-        //     segment.ray.origin += aperturePoint.x * cam.right + aperturePoint.y * cam.up;
-        //     segment.ray.direction = glm::normalize(focalPoint - segment.ray.origin);
-
-        // }
+        }
 
         segment.pixelIndex = index;
         segment.remainingBounces = traceDepth;
@@ -333,7 +349,7 @@ __global__ void shadeFakeMaterial(
 
                 // If the material is not refractive, multiply the color by the material color
                 if (!material.hasRefractive){
-                    pathSegment.color *= materialColor;
+                    pathSegment.color *= materialColor;        
                 }
 
                 // Funcation that calculates the new ray direction based on material property
@@ -402,7 +418,12 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
 
     int depth = 0;
     PathSegment* dev_path_end = dev_paths + pixelcount;
-    int num_paths = pixelcount;
+    unsigned int num_paths = pixelcount;
+
+    // Wrapping device pointers in thrust device pointers for stream compaction
+	thrust::device_ptr<PathSegment> thrust_pathsegments(dev_paths);
+	thrust::device_ptr<PathSegment> thrust_pathsegments_end(dev_path_end);
+	thrust::device_ptr<bool> thrust_conditionalBuffer(dev_boolBuffer);
 
     // --- PathSegment Tracing Stage ---
     // Shoot ray into scene, bounce between objects, push shading chunks
@@ -444,6 +465,24 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
             dev_materials);
         cudaDeviceSynchronize();
 
+        // Calculate the condition buffer and apply stream compaction via thrust::remove_if
+        if (guiData == nullptr || guiData->StreamCompaction) {
+			updateActiveMaskAndAccumulateColor<<<numBlocks1d, blockSize1d>>>(
+				dev_paths, num_paths, dev_boolBuffer, dev_image);
+
+			// Using thrust to remove inactive paths
+			thrust_pathsegments_end = thrust::remove_if(
+				thrust_pathsegments, thrust_pathsegments + num_paths, thrust_conditionalBuffer, thrust::identity<bool>());
+			cudaDeviceSynchronize();
+
+			num_paths = thrust_pathsegments_end - thrust_pathsegments;
+			numBlocks1d = dim3{ (num_paths + blockSize1d - 1) / blockSize1d };
+
+			if (num_paths == 0){
+                iterationComplete = true;
+            }
+		}
+
         if(depth == traceDepth) iterationComplete = true; // added conditional to stop iterations based on traceDepth
 
         if (guiData != NULL)
@@ -453,7 +492,16 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
     }
 
 
-    finalGather<<<numBlocks1d, blockSize1d>>>(num_paths, dev_image, dev_paths);
+    if (guiData == nullptr || guiData->StreamCompaction) {
+		if (num_paths) {
+			finalGather<<<numBlocks1d, blockSize1d>>>(num_paths, dev_image, dev_paths);
+			checkCUDAError("finalGather");
+		}
+	}
+	else {
+		finalGather<<<numBlocks1d, blockSize1d>>>(pixelcount, dev_image, dev_paths);
+		checkCUDAError("finalGather");
+	}
 
     ///////////////////////////////////////////////////////////////////////////
 

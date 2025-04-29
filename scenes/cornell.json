@@ -32,13 +32,6 @@
             "TYPE": "Specular",
             "RGB": [ 0.25, 0.75, 0.25 ],
             "ROUGHNESS": 0.0
-        },
-        "transparent": {
-            "TYPE": "Transparent",
-            "RGB": [ 0.25, 0.75, 0.25 ],
-            "ROUGHNESS": 0.0,
-            "IOR": 1.33,
-            "TRANSPARENCY": 1.0
         }
     },
     "Camera":
@@ -99,7 +92,7 @@
         },
         {
             "TYPE":"sphere",
-            "MATERIAL":"mirror",
+            "MATERIAL":"diffuse_white",
             "TRANS":[-1.0,4.0,-1.0],
             "ROTAT":[0.0,0.0,0.0],
             "SCALE":[3.0,3.0,3.0]

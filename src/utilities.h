@@ -19,10 +19,11 @@
 class GuiDataContainer
 {
 public:
-    GuiDataContainer() : TracedDepth(0), DoF(false), Stratified(false), StratNumCells(225) {}
+    GuiDataContainer() : TracedDepth(0), DoF(false), Stratified(false), StreamCompaction(true), StratNumCells(225) {}
     int TracedDepth;
     bool DoF;
     bool Stratified;
+    bool StreamCompaction;
     int StratNumCells;
 };
 
