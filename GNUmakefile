@@ -31,4 +31,22 @@ build:
 clean:
 	((cd build && make clean) 2>&- || true)
 
-.PHONY: all Debug MinSizeRel Release RelWithDebugInfo clean
+SCENE ?= scenes/cornell.json
+REPORT_DIR := build/reports
+
+run:
+	build/bin/cis565_path_tracer $(SCENE)
+
+nsys_profile: Release $(REPORT_DIR)
+	@TIMESTAMP=$$(date +%Y%m%d_%H%M%S); \
+	REPORT_FILE=$(REPORT_DIR)/nsys_report_$$TIMESTAMP; \
+	echo "Saving profile to $$REPORT_FILE.qdrep"; \
+	nsys profile --output $$REPORT_FILE \
+		--trace=cuda,nvtx,osrt \
+		--sample=none \
+		build/bin/cis565_path_tracer $(SCENE)
+
+$(REPORT_DIR):
+	mkdir -p $(REPORT_DIR)
+
+.PHONY: all Debug MinSizeRel Release RelWithDebugInfo clean nsys_profile
