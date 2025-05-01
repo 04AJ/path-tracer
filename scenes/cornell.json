@@ -27,24 +27,20 @@
             "TYPE":"Specular",
             "RGB":[0.98, 0.98, 0.98],
             "ROUGHNESS":0.0
-        },
-        "mirror": {
-            "TYPE": "Specular",
-            "RGB": [ 0.25, 0.75, 0.25 ],
-            "ROUGHNESS": 0.0
         }
     },
     "Camera":
     {
-        "RES":[1500,1000],
-        "FOVY":30.0,
+        "RES":[800,800],
+        "FOVY":45.0,
         "ITERATIONS":5000,
         "DEPTH":8,
         "FILE":"cornell",
         "EYE":[0.0,5.0,10.5],
         "LOOKAT":[0.0,5.0,0.0],
-      "UP": [ 0.0, 1.0, 0.0 ],
-      "APERTURE": 1.0
+        "UP":[0.0,1.0,0.0],
+        "APERTURE": 0.12,
+        "FOCALDISTANCE": 5.0
     },
     "Objects":
     [
@@ -92,7 +88,7 @@
         },
         {
             "TYPE":"sphere",
-            "MATERIAL":"diffuse_white",
+            "MATERIAL":"specular_white",
             "TRANS":[-1.0,4.0,-1.0],
             "ROTAT":[0.0,0.0,0.0],
             "SCALE":[3.0,3.0,3.0]
