@@ -59,10 +59,6 @@ __host__ __device__ void scatterRay(
         bool isEntering = cosT > 0.0f;
         float indexOfRefraction = isEntering ? (1.0f / m.indexOfRefraction) : m.indexOfRefraction;
     
-        float reflectance0 = (1.0f - indexOfRefraction) / (1.0f + indexOfRefraction);
-        reflectance0 *= reflectance0;
-        float reflectChance = reflectance0 + (1.0f - reflectance0) * powf(1.0f - cosT, 5.0f);
-    
 
         // Schlick's approximation to determine whether to reflect or refract
         float r0 = (1 - indexOfRefraction) / (1 + indexOfRefraction);

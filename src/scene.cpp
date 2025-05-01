@@ -38,20 +38,37 @@ void Scene::loadFromJSON(const std::string& jsonName)
         // TODO: handle materials loading differently
         if (p["TYPE"] == "Diffuse")
         {
+            newMaterial.hasReflective = 0.0f;
+			newMaterial.hasRefractive = 0.0f;
             const auto& col = p["RGB"];
             newMaterial.color = glm::vec3(col[0], col[1], col[2]);
         }
         else if (p["TYPE"] == "Emitting")
         {
+            newMaterial.hasReflective = 0.0f;
+			newMaterial.hasRefractive = 0.0f;
             const auto& col = p["RGB"];
             newMaterial.color = glm::vec3(col[0], col[1], col[2]);
             newMaterial.emittance = p["EMITTANCE"];
         }
         else if (p["TYPE"] == "Specular")
         {
+            float roughness = p["ROUGHNESS"];
+            newMaterial.hasReflective = 1.0f - roughness;
+			newMaterial.hasRefractive = 0.0f;
             const auto& col = p["RGB"];
             newMaterial.color = glm::vec3(col[0], col[1], col[2]);
+
         }
+        else if (p["TYPE"] == "Transparent")
+		{
+			const auto& col = p["RGB"];
+			float roughness = p["ROUGHNESS"];
+			newMaterial.color = glm::vec3(col[0], col[1], col[2]);		
+			newMaterial.hasReflective = 1.0f - roughness;
+			newMaterial.hasRefractive = p["TRANSPARENCY"];
+			newMaterial.indexOfRefraction = p["IOR"];
+		}
         MatNameToID[name] = materials.size();
         materials.emplace_back(newMaterial);
     }
@@ -97,6 +114,9 @@ void Scene::loadFromJSON(const std::string& jsonName)
     camera.position = glm::vec3(pos[0], pos[1], pos[2]);
     camera.lookAt = glm::vec3(lookat[0], lookat[1], lookat[2]);
     camera.up = glm::vec3(up[0], up[1], up[2]);
+    camera.aperture = cameraData["APERTURE"];
+    camera.focalDistance = cameraData["FOCALDISTANCE"];
+
 
     //calculate fov based on resolution
     float yscaled = tan(fovy * (PI / 180));

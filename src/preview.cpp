@@ -236,8 +236,16 @@ void RenderImGui()
     //ImGui::Text("counter = %d", counter);
     ImGui::Text("Traced Depth %d", imguiData->TracedDepth);
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-    ImGui::End();
 
+    ImGui::Text("Visual Settings");
+    ImGui::Checkbox("Enable Depth Of Field", &imguiData->DoF);
+    ImGui::Checkbox("Enable Stratified Sampling", &imguiData->Stratified);
+    ImGui::SliderInt("Stratification Cells", &imguiData->StratNumCells, 1, 1024);
+
+    ImGui::Text("Performance Settings");
+    ImGui::Checkbox("Enable Streamcompaction", &imguiData->StreamCompaction);
+
+    ImGui::End();
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -257,7 +265,7 @@ void mainLoop()
 
         runCuda();
 
-        string title = "CIS565 Path Tracer | " + utilityCore::convertIntToString(iteration) + " Iterations";
+        string title = "Path Tracer | " + utilityCore::convertIntToString(iteration) + " Iterations";
         glfwSetWindowTitle(window, title.c_str());
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
         glBindTexture(GL_TEXTURE_2D, displayImage);
