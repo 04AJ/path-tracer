@@ -41,44 +41,36 @@ __host__ __device__ glm::vec3 calculateRandomDirectionInHemisphere(
 }
 
 __host__ __device__ void scatterRay(
-    PathSegment & pathSegment,
-    glm::vec3 intersect,
-    glm::vec3 normal,
-    const Material &m,
-    thrust::default_random_engine &rng)
+    PathSegment & segment,
+    glm::vec3 hitPoint,
+    glm::vec3 surfNormal,
+    const Material &material,
+    thrust::default_random_engine &engine)
 {
+    thrust::uniform_real_distribution<float> dist{ 0.0f, 1.0f };
+    float randProb = dist(engine);
+
+    if (randProb < material.hasRefractive) { // refractive case
+        float cosIncidentAngle = -glm::dot(segment.ray.direction, surfNormal);
+        float sinIncidnetAngle = sqrtf(1 - cosIncidentAngle * cosIncidentAngle);
+        bool entering = cosIncidentAngle > 0.0f;
+        float refIdx = entering ? (1.0f / material.indexOfRefraction) : material.indexOfRefraction;
     
-    thrust::uniform_real_distribution<float> uniformDistribution{ 0.0f, 1.0f };
-    // Use to stocastically determine between reflective, refractive, and diffuse surfaces
-    float sampleProb = uniformDistribution(rng);
+        float baseReflectance = (1 - refIdx) / (1 + refIdx);
+        baseReflectance = baseReflectance * baseReflectance;
+        float schlickProb = baseReflectance + (1 - baseReflectance) * std::pow((1 - cosIncidentAngle), 5);
 
-    if (sampleProb < m.hasRefractive) { // refractive
-        float cosT = - glm::dot(pathSegment.ray.direction, normal);
-        float sinT = sqrtf(1 - cosT * cosT);
-
-        bool isEntering = cosT > 0.0f;
-        float indexOfRefraction = isEntering ? (1.0f / m.indexOfRefraction) : m.indexOfRefraction;
-    
-
-        // Schlick's approximation to determine whether to reflect or refract
-        float r0 = (1 - indexOfRefraction) / (1 + indexOfRefraction);
-        r0 = r0 * r0;
-        float schlickProbability = r0 + (1 - r0) * std::pow((1 - cosT), 5);
-
-        // Total reflection
-        if ((indexOfRefraction * sinT > 1) || (uniformDistribution(rng) < schlickProbability)) {
-            pathSegment.ray.direction = glm::reflect(pathSegment.ray.direction, normal);
-        }
-        else {
-            // glm::refract() implements Snell's law
-            pathSegment.ray.direction = glm::refract(pathSegment.ray.direction, normal, indexOfRefraction);
+        if ((refIdx * sinIncidnetAngle > 1) || (dist(engine) < schlickProb)) {
+            segment.ray.direction = glm::reflect(segment.ray.direction, surfNormal);
+        } else {
+            segment.ray.direction = glm::refract(segment.ray.direction, surfNormal, refIdx);
         }
     }
-    else if (sampleProb < m.hasReflective) { //reflective
-        pathSegment.ray.direction = glm::reflect(pathSegment.ray.direction, normal);
+    else if (randProb < material.hasReflective) { // reflective case
+        segment.ray.direction = glm::reflect(segment.ray.direction, surfNormal);
     }
-    else { // diffuse via cosine-weighted hemisphere
-        pathSegment.ray.direction = calculateRandomDirectionInHemisphere(normal, rng);
+    else { // diffuse via cosine-weighted hemisphere case
+        segment.ray.direction = calculateRandomDirectionInHemisphere(surfNormal, engine);
     }
-    pathSegment.ray.origin = intersect + 0.0001f * pathSegment.ray.direction;
+    segment.ray.origin = hitPoint + 0.0001f * segment.ray.direction;
 }

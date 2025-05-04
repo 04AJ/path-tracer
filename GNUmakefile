@@ -21,10 +21,6 @@ Release: build
 RelWithDebugInfo: build
 	(cd build && ${CMAKE} -DCMAKE_BUILD_TYPE=$@ .. && make)
 
-
-run:
-	build/bin/cis565_path_tracer scenes/cornell.json
-
 build:
 	mkdir -p build
 
@@ -49,4 +45,4 @@ nsys_profile: Release $(REPORT_DIR)
 $(REPORT_DIR):
 	mkdir -p $(REPORT_DIR)
 
-.PHONY: all Debug MinSizeRel Release RelWithDebugInfo clean nsys_profile
+.PHONY: all Debug MinSizeRel Release RelWithDebugInfo clean nsys_profile run
