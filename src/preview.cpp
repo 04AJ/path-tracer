@@ -244,7 +244,7 @@ void RenderImGui()
 
     ImGui::Text("Performance Settings");
     ImGui::Checkbox("Enable Streamcompaction", &imguiData->StreamCompaction);
-
+    ImGui::Checkbox("Sort Materials", &imguiData->SortMaterials);
     ImGui::End();
 
     ImGui::Render();
@@ -261,6 +261,10 @@ void mainLoop()
 {
     while (!glfwWindowShouldClose(window))
     {
+        if (iteration <= 100)
+        {
+            //printf("%f,\n", 1000.0f / ImGui::GetIO().Framerate);
+        }
         glfwPollEvents();
 
         runCuda();
